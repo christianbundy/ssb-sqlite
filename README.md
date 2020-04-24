@@ -23,10 +23,16 @@ Time (mean ± σ):      4.839 s ±  0.065 s    [User: 3.725 s, System: 1.593 s]
 Range (min … max):    4.768 s …  4.975 s    10 runs
 ```
 
-Reading fro the JSONL file and passing through `JSON.parse()`:
+Reading from the JSONL file and passing through `JSON.parse()`:
 
 ```
 Time (mean ± σ):     10.115 s ±  0.182 s    [User: 8.900 s, System: 1.773 s]
 Range (min … max):    9.894 s … 10.429 s    10 runs
 ```
 
+Reading, parsing as JSON, and inserting into an in-memory instance of SQLite.
+
+```
+Time (mean ± σ):     10.650 s ±  0.382 s    [User: 9.475 s, System: 1.873 s]
+Range (min … max):   10.388 s … 11.673 s    10 runs
+```
