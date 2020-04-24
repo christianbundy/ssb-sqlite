@@ -1,0 +1,19 @@
+{
+  "name": "ssb-sqlite",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Christian Bundy <christianbundy@fraction.io>",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "knex": "^0.20.10",
+    "sqlite3": "^4.1.1"
+  },
+  "devDependencies": {
+    "common-good": "^2.0.3"
+  }
+}
