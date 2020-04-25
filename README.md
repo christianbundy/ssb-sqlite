@@ -12,7 +12,8 @@ ssb createLogStream | jq -c > log.jsonl
 
 This creates a huge file where each line is a JSON message. Reading this ends
 up being **fast and easy** in most programming languages, which is what we're
-aiming for.
+aiming for. We could consume directly from `createLogStream`, but that takes
+10x longer than just reading a file.
 
 ## Performance
 
@@ -40,4 +41,37 @@ Reading, parsing as JSON, and inserting into a **persistent** SQLite file.
 
 ```
 183 seconds
+```
+
+That's super fast, but doing it all in one transaction means that we have to
+store everything in memory. If you have a fancy desktop computer that works
+great, but low-resource devices like phones and Raspberry Pis don't like that.
+Instead, we can write to the filesystem in batches. For example, 1024 at a
+time:
+
+```
+Time (mean ± σ):     231.531 s ± 19.177 s    [User: 108.368 s, System: 10.284 s]
+Range (min … max):   217.971 s … 245.091 s    2 runs
+```
+
+One problem is that we really don't want to have to re-read every message to
+get common data, like what people want to call themselves. We can create a new
+table for authors that has columns for the key, name, image, and description.
+
+**Note:** Somehow this code is faster and only reports like 180 seconds. I need
+to investigate and figure out whether this is a glitch or whether it's actually
+faster now.
+
+Once we've loaded all of the relevant data into SQLite, we can easily query it:
+
+```console
+$ sqlite3 ssb.db
+sqlite> select count(*) from messages;
+1161216
+sqlite> select count(*) from authors;
+16623
+sqlite> select key from messages order by random() limit 1;
+%fZp5XDsBvYNZ2NgvWrmd25/v9PT2DeGSnx55pq/vQOc=.sha256
+sqlite> select name from authors order by random() limit 1;
+patchfoo
 ```
