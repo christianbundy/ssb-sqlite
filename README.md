@@ -33,6 +33,11 @@ Range (min … max):    9.894 s … 10.429 s    10 runs
 Reading, parsing as JSON, and inserting into an in-memory instance of SQLite.
 
 ```
-Time (mean ± σ):     10.650 s ±  0.382 s    [User: 9.475 s, System: 1.873 s]
-Range (min … max):   10.388 s … 11.673 s    10 runs
+179 seconds
+```
+
+Reading, parsing as JSON, and inserting into a **persistent** SQLite file.
+
+```
+183 seconds
 ```
