@@ -4,7 +4,7 @@ const path = require("path");
 
 const { Sequelize } = require("sequelize");
 
-const inMemory = true;
+const inMemory = false;
 const storage = inMemory ? ":memory:" : path.join(__dirname, "..", "ssb.db");
 console.log({ inMemory, storage });
 
