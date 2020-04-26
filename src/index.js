@@ -1,10 +1,11 @@
 const fs = require("fs");
 const readline = require("readline");
 const path = require("path");
-const { Sequelize, DataTypes } = require("sequelize");
+
+const { Sequelize } = require("sequelize");
 
 const inMemory = false;
-const storage = inMemory ? ":memory:" : path.join(__dirname, "ssb.db");
+const storage = inMemory ? ":memory:" : path.join(__dirname, "..", "ssb.db");
 console.log({ inMemory, storage });
 
 try {
@@ -22,59 +23,7 @@ const sequelize = new Sequelize({
   logging: false,
 });
 
-const memoryReporter = setInterval(() => {
-  console.log(
-    Object.fromEntries(
-      Object.entries(process.memoryUsage()).map(([k, v]) => [
-        k,
-        v / 1024 / 1024,
-      ])
-    )
-  );
-}, 1000);
-clearInterval(memoryReporter);
-
-const Author = sequelize.define("author", {
-  key: {
-    type: DataTypes.STRING(53),
-    allowNull: false,
-  },
-  name: {
-    type: DataTypes.STRING,
-  },
-  description: {
-    type: DataTypes.STRING,
-  },
-  image: {
-    type: DataTypes.STRING,
-  },
-});
-
-const Message = sequelize.define("message", {
-  key: {
-    type: DataTypes.STRING(52),
-    allowNull: false,
-  },
-  previousMessage: {
-    type: DataTypes.STRING(52),
-  },
-  author: {
-    type: DataTypes.STRING(53),
-    allowNull: false,
-  },
-  content: {
-    type: DataTypes.JSON,
-    allowNull: false,
-  },
-  timestampReceived: {
-    type: DataTypes.DATE,
-    allowNull: false,
-  },
-  timestampAsserted: {
-    type: DataTypes.DATE,
-    allowNull: false,
-  },
-});
+const { Author, Message } = require('./models')(sequelize)
 
 const fileStream = fs.createReadStream("log.jsonl");
 
@@ -84,7 +33,6 @@ const rl = readline.createInterface({
   input: fileStream,
   crlfDelay: Infinity,
 });
-
 
 // { "@abc": { name, image, description } }
 const cachedAuthorData = {};
@@ -194,7 +142,7 @@ const main = async () => {
   // Once we're done reading the stream, make sure we write all of the rows
   // that we haven't already written.
   if (rows.length) {
-    write()
+    await write()
   }
 
   // Convert our object to a row that we can insert into the database.
