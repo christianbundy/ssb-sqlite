@@ -58,9 +58,14 @@ One problem is that we really don't want to have to re-read every message to
 get common data, like what people want to call themselves. We can create a new
 table for authors that has columns for the key, name, image, and description.
 
-**Note:** Somehow this code is faster and only reports like 180 seconds. I need
-to investigate and figure out whether this is a glitch or whether it's actually
-faster now.
+Also, if we batch our changes into a transaction, we get some really nice
+performance:
+
+
+```
+Time (mean ± σ):     136.273 s ± 46.432 s    [User: 85.802 s, System: 8.877 s]
+Range (min … max):   87.937 s … 180.530 s    3 runs
+```
 
 Once we've loaded all of the relevant data into SQLite, we can easily query it:
 
