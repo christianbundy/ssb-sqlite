@@ -20,7 +20,7 @@ try {
 const sequelize = new Sequelize({
   dialect: "sqlite",
   storage,
-  logging:false,
+  logging: false,
 });
 
 const { Message } = require("./models")(sequelize);
@@ -42,8 +42,9 @@ const main = async () => {
 
   let transaction = await sequelize.transaction();
   let lineNumber = 0;
-  
-  setInterval(() => console.log(lineNumber.toLocaleString()), 1000)
+
+  // HACK(BULK): `Message.bulkCreate()` is much faster than `Message.create()`.
+  let messagesToCreate = [];
 
   for await (const line of rl) {
     lineNumber += 1;
@@ -58,20 +59,23 @@ const main = async () => {
     const timestampAsserted = value.timestamp;
     const content = JSON.stringify(value.content);
 
-    await Message.create(
-      {
-        author,
-        content,
-        key,
-        previousMessage,
-        timestampAsserted,
-        timestampReceived,
-      },
-    //  { transaction }
-    );
+    messagesToCreate.push({
+      author,
+      content,
+      key,
+      previousMessage,
+      timestampAsserted,
+      timestampReceived,
+    });
 
     if (lineNumber % batchSize === 0) {
-      console.log(lineNumber.toLocaleString())
+      // HACK(BULK)
+      if (messagesToCreate.length) {
+        await Message.bulkCreate(messagesToCreate, { transaction });
+        messagesToCreate = [];
+      }
+
+      console.log(lineNumber.toLocaleString());
       await transaction.commit();
       transaction = await sequelize.transaction();
     }
@@ -80,15 +84,15 @@ const main = async () => {
   // Once we're done reading the stream, make sure we write all of the rows
   // that we haven't already written.
   if (lineNumber % batchSize > 0) {
-    console.log(lineNumber.toLocaleString())
+    console.log(lineNumber.toLocaleString());
     await transaction.commit();
   }
 
   console.log("Done!");
 };
 
-  if (module.parent) {
-    module.exports = main;
-  } else {
-    main();
-  }
+if (module.parent) {
+  module.exports = main;
+} else {
+  main();
+}
