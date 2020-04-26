@@ -4,7 +4,7 @@ const path = require("path");
 
 const { Sequelize } = require("sequelize");
 
-const inMemory = false;
+const inMemory = true;
 const storage = inMemory ? ":memory:" : path.join(__dirname, "..", "ssb.db");
 console.log({ inMemory, storage });
 
@@ -23,7 +23,7 @@ const sequelize = new Sequelize({
   logging: false,
 });
 
-const { Message } = require("./models")(sequelize);
+const { Message, Author } = require("./models")(sequelize);
 
 const fileStream = fs.createReadStream("log.jsonl");
 
@@ -34,7 +34,7 @@ const rl = readline.createInterface({
   crlfDelay: Infinity,
 });
 
-const batchSize = 1024;
+const batchSize = 2048;
 
 const main = async () => {
   // Sync up our models with the database.
@@ -45,6 +45,27 @@ const main = async () => {
 
   // HACK(BULK): `Message.bulkCreate()` is much faster than `Message.create()`.
   let messagesToCreate = [];
+
+  const start = Date.now();
+
+  const perSecondInterval = setInterval(() => {
+    const messages = lineNumber;
+    const seconds = Math.round((Date.now() - start) / 1000);
+    const messagesPerSecond = Math.round(lineNumber / seconds);
+
+    // 1 million bytes
+    const toMb = (bytes) => `${Math.round((bytes / 1000000) * 100) / 100} MB`;
+
+    const used = process.memoryUsage();
+
+    console.log(
+      Object.fromEntries(
+        Object.entries(used).map(([key, value]) => [key, toMb(value)])
+      )
+    );
+
+    console.log({ messages, seconds, messagesPerSecond });
+  }, 6000);
 
   for await (const line of rl) {
     lineNumber += 1;
@@ -68,6 +89,56 @@ const main = async () => {
       timestampReceived,
     });
 
+    // If we can see the content of the message (i.e. it isn't private), then
+    // we probably want to process the message for further information. For
+    // example, 'about' messages let people save their name, image, and
+    // description. In the future this code can be expanded to handle other
+    // types of messages.
+    if (typeof value.content === "object") {
+      switch (value.content.type) {
+        case "about": {
+          if (typeof value.content.name === "string") {
+            await Author.upsert(
+              { key: author, name: value.content.name },
+              { transaction }
+            );
+          }
+          if (typeof value.content.description === "string") {
+            await Author.upsert(
+              { key: author, description: value.content.description },
+              { transaction }
+            );
+          }
+
+          // Sometime the image is a blob string, sometimes it's an object with
+          // a `link` property containing the blob string, and (of course)
+          // sometimes it's just a malformed message that we can't understand.
+          switch (typeof value.content.image) {
+            case "string": {
+              await Author.upsert(
+                { key: author, image: value.content.image },
+                { transaction }
+              );
+              break;
+            }
+            case "object": {
+              // Apparently `typeof null === "object"...
+              if (
+                value.content.image !== null &&
+                value.content.image.link === "string"
+              ) {
+                await Author.upsert(
+                  { key: author, image: value.content.image.link },
+                  { transaction }
+                );
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+
     if (lineNumber % batchSize === 0) {
       // HACK(BULK)
       if (messagesToCreate.length) {
@@ -75,20 +146,18 @@ const main = async () => {
         messagesToCreate = [];
       }
 
-      console.log(lineNumber.toLocaleString());
       await transaction.commit();
       transaction = await sequelize.transaction();
     }
   }
 
+  clearInterval(perSecondInterval);
+
   // Once we're done reading the stream, make sure we write all of the rows
   // that we haven't already written.
   if (lineNumber % batchSize > 0) {
-    console.log(lineNumber.toLocaleString());
     await transaction.commit();
   }
-
-  console.log("Done!");
 };
 
 if (module.parent) {
