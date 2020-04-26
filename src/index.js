@@ -20,10 +20,10 @@ try {
 const sequelize = new Sequelize({
   dialect: "sqlite",
   storage,
-  logging: false,
+  logging:false,
 });
 
-const { Author, Message } = require('./models')(sequelize)
+const { Message } = require("./models")(sequelize);
 
 const fileStream = fs.createReadStream("log.jsonl");
 
@@ -34,38 +34,23 @@ const rl = readline.createInterface({
   crlfDelay: Infinity,
 });
 
-// { "@abc": { name, image, description } }
-const cachedAuthorData = {};
+const batchSize = 1024;
 
-const main = async () => { 
-  // How many messages we've written to the database?
-  let written = 0;
-  // Which rows still need to be written to the database?
-  let rows = [];
-
+const main = async () => {
   // Sync up our models with the database.
-  await sequelize.sync()
+  await sequelize.sync();
 
-  // Every once in a while, we want to take `rows` and insert them into the
-  // database in bulk. Once we're finished writing all of the rows, we can
-  // reset `rows` to an empty array.
-  const write = async () => {
-      await Message.bulkCreate(rows);
-      written += rows.length;
-      console.log(written.toLocaleString());
-      rows = [];
-  }
-
-  // We don't want to write when `rows` only has one item, but we also don't
-  // want to wait until `rows` has a billion items because it'll take up a
-  // bunch of memory. There's no right answer, but we can choose an arbitrary
-  // number that balances the trade-offs between speed and memory consumption.
-  const batchSize = 1024;
-  // If the row is big enough to justify a batch, write it.it
-  const maybeWrite = async () => rows.length === batchSize ? write() : null
+  let transaction = await sequelize.transaction();
+  let lineNumber = 0;
+  
+  setInterval(() => console.log(lineNumber.toLocaleString()), 1000)
 
   for await (const line of rl) {
-    const { key, value, timestamp } = JSON.parse(line);
+    lineNumber += 1;
+
+    const message = JSON.parse(line);
+    //  await ingestMessage({ message, transaction })
+    const { key, value, timestamp } = message;
     const { previous, author } = value;
 
     const previousMessage = previous;
@@ -73,95 +58,37 @@ const main = async () => {
     const timestampAsserted = value.timestamp;
     const content = JSON.stringify(value.content);
 
-    rows.push({
-      author,
-      content,
-      key,
-      previousMessage,
-      timestampAsserted,
-      timestampReceived,
-    });
+    await Message.create(
+      {
+        author,
+        content,
+        key,
+        previousMessage,
+        timestampAsserted,
+        timestampReceived,
+      },
+    //  { transaction }
+    );
 
-    await maybeWrite();
-
-    // If we can see the content of the message (i.e. it isn't private), then
-    // we probably want to process the message for further information. For
-    // example, 'about' messages let people save their name, image, and
-    // description. In the future this code can be expanded to handle other
-    // types of messages.
-    if (typeof value.content === "object") {
-      switch (value.content.type) {
-        case "about": {
-
-          // We don't actually want to write to the database each time that
-          // someone changes their name, image, or description. Instead, we
-          // just save it into an object and then write all of those rows once
-          // we're done processing messages.
-          //
-          // TODO: Refactor the batch writing code so that these are
-          // implemented in the same transaction as the batch write? It feels
-          // bad to maintain state in *both* `rows` and this other
-          // `cachedAuthorData` object.
-          if (cachedAuthorData[author] === undefined) {
-            cachedAuthorData[author] = {};
-          }
-
-          const thisAuthor = cachedAuthorData[author];
-
-          if (typeof value.content.name === "string") {
-            thisAuthor.name = value.content.name;
-          }
-          if (typeof value.content.description === "string") {
-            thisAuthor.description = value.content.description;
-          }
-
-          // Sometime the image is a blob string, sometimes it's an object with
-          // a `link` property containing the blob string, and (of course)
-          // sometimes it's just a malformed message that we can't understand.
-          switch (typeof value.content.image) {
-            case "string": {
-              thisAuthor.image = value.content.image;
-              break;
-            }
-            case "object": {
-              // Apparently `typeof null === "object"...
-              if (
-                value.content.image !== null &&
-                value.content.image.link === "string"
-              ) {
-                thisAuthor.image = value.content.image.link;
-              }
-              break;
-            }
-          }
-        }
-      }
+    if (lineNumber % batchSize === 0) {
+      console.log(lineNumber.toLocaleString())
+      await transaction.commit();
+      transaction = await sequelize.transaction();
     }
   }
 
   // Once we're done reading the stream, make sure we write all of the rows
   // that we haven't already written.
-  if (rows.length) {
-    await write()
+  if (lineNumber % batchSize > 0) {
+    console.log(lineNumber.toLocaleString())
+    await transaction.commit();
   }
 
-  // Convert our object to a row that we can insert into the database.
-  const authorRows = Object.entries(cachedAuthorData).map(
-    ([key, { name, image, description }]) => ({
-      key,
-      name,
-      image,
-      description,
-    })
-  );
-  console.log("Writing authors...");
-
-  await Author.bulkCreate(authorRows);
   console.log("Done!");
 };
 
-if (module.parent) {
-  module.exports = main
-} else {
-  main()
-}
+  if (module.parent) {
+    module.exports = main;
+  } else {
+    main();
+  }

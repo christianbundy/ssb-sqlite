@@ -1,4 +1,4 @@
-const { Sequelize, DataTypes } = require("sequelize");
+const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
   const Author = sequelize.define("author", {
@@ -44,4 +44,4 @@ module.exports = (sequelize) => {
   });
 
   return { Author, Message };
-}
+};

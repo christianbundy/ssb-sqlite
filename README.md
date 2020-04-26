@@ -75,3 +75,10 @@ sqlite> select key from messages order by random() limit 1;
 sqlite> select name from authors order by random() limit 1;
 patchfoo
 ```
+
+## Acknowledgements
+
+Most of the ideas in this module (and a large amount of code) came directly
+from Cinnamon, who I've been really enjoying working with on this project (and
+Oasis!). Please don't confuse the Git commit history with who has *actually*
+been pouring time and energy into these ideas. ❤
